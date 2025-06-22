@@ -22,15 +22,95 @@ export interface BandwidthSample {
   kbps: number
 }
 
-interface Props {
-  src: string
-  onMeta: (m: StreamMeta) => void
-  onMetrics: (s: BandwidthSample[]) => void
+export interface FrameInfo {
+  id: string
+  timestamp: number
+  currentTime: number
+  width: number
+  height: number
+  dataUrl: string
+  videoUrl: string
+  videoTitle: string
 }
 
-export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
+interface Props {
+  src: string
+  videoTitle?: string
+  onMeta: (m: StreamMeta) => void
+  onMetrics: (s: BandwidthSample[]) => void
+  onFrameCapture?: (frame: FrameInfo) => void
+}
+
+export default function VideoPlayer({ src, videoTitle, onMeta, onMetrics, onFrameCapture }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const samplesRef = useRef<BandwidthSample[]>([])
+
+  // Function to capture current frame
+  const captureCurrentFrame = (): FrameInfo | null => {
+    const video = videoRef.current
+    if (!video) {
+      console.error('Video element not found')
+      return null
+    }
+    
+    if (video.readyState < 2) {
+      console.error('Video not ready, readyState:', video.readyState)
+      return null
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.error('Video dimensions are 0:', video.videoWidth, 'x', video.videoHeight)
+      return null
+    }
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      console.error('Could not get canvas context')
+      return null
+    }
+
+    // Set canvas size to match video
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    try {
+      // Draw current video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      // Get image data
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8) // Use JPEG for better compatibility
+      
+      if (dataUrl === 'data:,' || dataUrl.length < 100) {
+        console.error('Generated empty or invalid dataUrl:', dataUrl.substring(0, 50))
+        return null
+      }
+      
+      const frameInfo: FrameInfo = {
+        id: `frame-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        currentTime: video.currentTime,
+        width: video.videoWidth,
+        height: video.videoHeight,
+        dataUrl,
+        videoUrl: src,
+        videoTitle: videoTitle || 'Unknown Video'
+      }
+
+      return frameInfo
+    } catch (error) {
+      console.error('Error capturing frame:', error)
+      return null
+    }
+  }
+
+  // Expose capture function globally (for testing/debugging)
+  useEffect(() => {
+    ;(window as any).captureFrame = captureCurrentFrame
+    return () => {
+      delete (window as any).captureFrame
+    }
+  }, [])
 
   useEffect(() => {
     const video = videoRef.current
@@ -53,9 +133,10 @@ export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
           width: l.width ?? 0,
           height: l.height ?? 0,
           bitrate: l.bitrate ?? 0,
-          codecs: l.attrs?.CODECS
+          codecs: l.attrs?.CODECS,
         }))
         const [vCodec, aCodec] = (levels[0].codecs ?? '').split(',')
+        
         onMeta({
           levels,
           duration: d.levels?.[0]?.details?.totalduration ?? 0,
@@ -64,6 +145,27 @@ export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
           levelCount: levels.length
         })
         video.play().catch(() => {})
+      })
+
+      // Level loaded → send updated meta with duration from details
+      hls.on(Hls.Events.LEVEL_LOADED, (_e, d: any) => {
+        if (d.details?.totalduration && hls) {
+          const levels = hls.levels.map(l => ({
+            width: l.width ?? 0,
+            height: l.height ?? 0,
+            bitrate: l.bitrate ?? 0,
+            codecs: l.attrs?.CODECS,
+          }))
+          const [vCodec, aCodec] = (levels[0].codecs ?? '').split(',')
+          
+          onMeta({
+            levels,
+            duration: d.details.totalduration,
+            audioCodec: aCodec,
+            videoCodec: vCodec,
+            levelCount: levels.length
+          })
+        }
       })
 
       hls.on(Hls.Events.FRAG_LOADED, (_e, p: any) => {
@@ -92,7 +194,7 @@ export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
       video.src = src
       video.addEventListener(
         'loadedmetadata',
-        () =>
+        () => {
           onMeta({
             levels: [
               {
@@ -103,13 +205,29 @@ export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
             ],
             duration: video.duration,
             levelCount: 1
-          }),
+          })},
         { once: true }
+
       )
     }
 
     return () => hls?.destroy()
   }, [src, onMeta, onMetrics])
 
-  return <video ref={videoRef} controls className="w-full h-72 rounded-lg" />
+  return (
+    <div className="relative">
+      <video ref={videoRef} controls className="w-full h-72 rounded-lg" crossOrigin="anonymous" />
+      <button
+        onClick={() => {
+          const frame = captureCurrentFrame()
+          if (frame && onFrameCapture) {
+            onFrameCapture(frame)
+          }
+        }}
+        className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+      >
+        📸 Add to Collection
+      </button>
+    </div>
+  )
 }
