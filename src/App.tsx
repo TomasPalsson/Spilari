@@ -1,103 +1,97 @@
 import { useState, useEffect } from 'react'
-import { S3Client, ListObjectsCommand, type ListObjectsCommandInput} from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsCommand, type ListObjectsCommandInput } from "@aws-sdk/client-s3"
 import './App.css'
-import FileCard from './components/FileCard';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import SettingsModal from './components/SettingsModal';
+import FileCard from './components/FileCard'
+import SettingsModal from './components/SettingsModal'
+import VideoPlayer, { type StreamMeta, type BandwidthSample } from './components/VideoPlayer'
+import BandwidthChart from './components/BandwidthChart'
 
 function App() {
   const [search, setSearch] = useState("")
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [item, setItem] = useState<any>(null);
-  
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [item, setItem] = useState<any>(null)
+  const [meta, setMeta] = useState<StreamMeta | null>(null)
+  const [samples, setSamples] = useState<BandwidthSample[]>([])
+
   // Load settings from localStorage
   const getStoredSettings = () => {
-    const storedSettings = localStorage.getItem('s3Settings');
+    const storedSettings = localStorage.getItem('s3Settings')
     return storedSettings ? JSON.parse(storedSettings) : {
       bucket: '',
       accessKeyId: '',
       secretAccessKey: ''
-    };
-  };
+    }
+  }
 
-  const [settings, setSettings] = useState(getStoredSettings());
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [settingsConfigured, setSettingsConfigured] = useState(false);
-  
-  const [items, setItems] = useState<any[]>([]);
-  const [client, setClient] = useState<S3Client | null>(null);
+  const [settings, setSettings] = useState(getStoredSettings())
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [settingsConfigured, setSettingsConfigured] = useState(false)
+
+  const [items, setItems] = useState<any[]>([])
+  const [client, setClient] = useState<S3Client | null>(null)
 
   // Check if settings are configured
   useEffect(() => {
-    const { bucket, accessKeyId, secretAccessKey } = settings;
-    const configured = !!bucket && !!accessKeyId && !!secretAccessKey;
-    
-    setSettingsConfigured(configured);
-    
+    const { bucket, accessKeyId, secretAccessKey } = settings
+    const configured = !!bucket && !!accessKeyId && !!secretAccessKey
+
+    setSettingsConfigured(configured)
+
     if (configured) {
-      // Initialize S3 client when settings are available
       setClient(new S3Client({
         region: "eu-west-1",
-        credentials: {
-          accessKeyId,
-          secretAccessKey
-        }
-      }));
+        credentials: { accessKeyId, secretAccessKey }
+      }))
     } else {
-      // Open settings modal if not configured
-      setIsSettingsModalOpen(true);
+      setIsSettingsModalOpen(true)
     }
-  }, [settings]);
+  }, [settings])
 
   // Save settings to localStorage
   const saveSettings = (newSettings: { bucket: string; accessKeyId: string; secretAccessKey: string }) => {
-    localStorage.setItem('s3Settings', JSON.stringify(newSettings));
-    setSettings(newSettings);
-    setIsSettingsModalOpen(false);
-  };
+    localStorage.setItem('s3Settings', JSON.stringify(newSettings))
+    setSettings(newSettings)
+    setIsSettingsModalOpen(false)
+  }
 
   const ListBuckets = async () => {
     if (!client || !settingsConfigured) {
-      setIsSettingsModalOpen(true);
-      return;
+      setIsSettingsModalOpen(true)
+      return
     }
 
     try {
       const input = {
         Bucket: settings.bucket,
         prefix: search,
-      } as ListObjectsCommandInput;
+      } as ListObjectsCommandInput
 
-      const data = await client.send(new ListObjectsCommand(input));
-      console.log("Success", data.Contents);
-
-      const filteredItems = await Promise.all(
-        (data.Contents || []).filter(item =>
+      const data = await client.send(new ListObjectsCommand(input))
+      const filteredItems = (data.Contents || [])
+        .filter(item =>
+          (item.Key ?? '').toLowerCase().includes('master') &&
           (item.Key ?? '').toLowerCase().includes(search.toLowerCase())
-        ).map(async item => {
-          const signedUrl = await getSignedUrl(client, new GetObjectCommand({
-            Bucket: settings.bucket,
-            Key: item.Key
-          }), { expiresIn: 3600 });
-          return { ...item, signedUrl };
-        })
-      );
+        )
+        .map(item => ({
+          ...item,
+          publicUrl: `https://${settings.bucket}.s3.eu-west-1.amazonaws.com/${item.Key}`
+        }))
 
-      setItems(filteredItems);
+      setItems(filteredItems)
     } catch (err) {
-      console.log("Error", err);
+      console.error(err)
     }
   }
 
   const handleVideoPlay = (url: string, item: any) => {
-    setVideoUrl(url);
-    setItem(item);
-  };
+    setVideoUrl(url)
+    setItem(item)
+    setMeta(null)
+    setSamples([])
+  }
 
   return (
     <div className="min-h-screen flex flex-row">
-      {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => settingsConfigured && setIsSettingsModalOpen(false)}
@@ -115,7 +109,7 @@ function App() {
             Settings
           </button>
         </div>
-        
+
         <input
           type="text"
           value={search}
@@ -137,34 +131,43 @@ function App() {
           ))}
         </ul>
       </div>
+
       {videoUrl && (
-        <div className="w-1/2 bg-zinc-800 flex flex-col items-center justify-start p-4 m-4 rounded-lg shadow-lg border border-gray-700 relative">
-          <button
-            onClick={() => setVideoUrl(null)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-200 text-xl font-bold"
-            aria-label="Close video player"
-          >
-            ×
-          </button>
-          <video
-            src={videoUrl}
-            controls
-            autoPlay
-            className="w-full h-72 rounded-lg mb-4"
-          >
-            Your browser does not support the video tag.
-          </video>
-          <div className="text-gray-300 text-sm text-left w-full">
-            <p className="mb-2 font-semibold">Bucket: <span className="font-normal">{settings.bucket}</span></p>
-            <p className="mb-2 font-semibold">Key: <span className="font-normal break-all">{item?.Key}</span></p>
-            {item?.LastModified && (
-              <p className="mb-2 font-semibold">Last Modified: <span className="font-normal">{new Date(item.LastModified).toLocaleString()}</span></p>
+        <>
+          <div className="w-1/2 bg-zinc-900 flex flex-col items-start justify-start p-6 m-4 rounded-lg shadow-xl border border-gray-700 relative">
+            <button
+              onClick={() => setVideoUrl(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 text-2xl font-bold"
+              aria-label="Close video player"
+            >
+              ×
+            </button>
+
+            <VideoPlayer
+              src={videoUrl}
+              onMeta={setMeta}
+              onMetrics={setSamples} />
+
+            {meta && (
+              <div className="mt-6 w-full text-gray-300">
+                <h3 className="text-xl font-semibold mb-4">Stream Metadata</h3>
+                <p><strong>Duration:</strong> {meta.duration.toFixed(1)} s</p>
+                <p><strong>Audio Codec:</strong> {meta.audioCodec}</p>
+                <p><strong>Video Codec:</strong> {meta.videoCodec}</p>
+                <p><strong>Total Renditions:</strong> {meta.levelCount}</p>
+              </div>
             )}
-            {item?.Size && (
-              <p className="mb-2 font-semibold">Size: <span className="font-normal">{(item.Size / (1024 * 1024)).toFixed(2)} MB</span></p>
-            )}
+
+            <div className="mt-6 w-full text-gray-300">
+              <h3 className="text-xl font-semibold mb-4">Bandwidth Samples</h3>
+              <p><strong>Samples Collected:</strong> {samples.length}</p>
+              <p><strong>Average Bandwidth:</strong> {samples.reduce((acc, s) => acc + s.kbps, 0) / samples.length || 0} kbps</p>
+              <p><strong>Last Sample:</strong> {samples.length > 0 ? new Date(samples[samples.length - 1].time).toLocaleTimeString() : 'N/A'}</p>
+              <p><strong>Total Duration:</strong> {samples.length > 0 ? ((samples[samples.length - 1].time - samples[0].time) / 1000).toFixed(1) : 'N/A'} seconds</p>
+              {samples.length > 0 && <BandwidthChart data={samples} />}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

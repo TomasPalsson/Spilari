@@ -2,16 +2,16 @@ import React from "react";
 import { FaVideo } from "react-icons/fa";
 
 interface FileCardProps {
-  file: { Key: string; signedUrl?: string };
+  file: { Key: string; publicUrl?: string };
   bucket: string;
   onVideoPlay: (url: string, item: any) => void;
 }
 
 const FileCard: React.FC<FileCardProps> = ({ file, bucket, onVideoPlay }) => {
     if (!file.Key) return null;
-    const url = file.signedUrl || (bucket ? `https://${bucket}.s3.eu-west-1.amazonaws.com/${file.Key}` : '');
+    const url = file.publicUrl || (bucket ? `https://${bucket}.s3.eu-west-1.amazonaws.com/${file.Key}` : '');
     const fileName = file.Key.split("/").pop();
-    const isVideo = (fileName ?? '').toLowerCase().endsWith('.mp4');
+    const isVideo = (fileName ?? '').toLowerCase().endsWith('.m3u8') || (fileName ?? '').toLowerCase().endsWith('.mp4');
 
     const handleCardClick = () => {
         if (isVideo && url) onVideoPlay(url, file);
@@ -32,7 +32,7 @@ const FileCard: React.FC<FileCardProps> = ({ file, bucket, onVideoPlay }) => {
                     <p
                         className="text-gray-100 font-semibold text-xl"
                     >
-                        {fileName}
+                        {file.Key.split('/')[0] || 'Unknown File'}
                     </p>
                     <div className="text-xs text-gray-400 mt-1 break-all">
                         {file.Key}
