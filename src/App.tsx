@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { S3Client, ListObjectsCommand, type ListObjectsCommandInput } from "@aws-sdk/client-s3"
+import { AiOutlineMacCommand } from 'react-icons/ai'
 import './App.css'
 import FileCard from './components/FileCard'
 import SettingsModal from './components/SettingsModal'
@@ -32,6 +33,31 @@ function App() {
   const [items, setItems] = useState<any[]>([])
   const [allItems, setAllItems] = useState<any[]>([]) // Store all items
   const [client, setClient] = useState<S3Client | null>(null)
+
+  // Keyboard event handler for Command+K
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Command+K (Mac) or Ctrl+K (Windows/Linux)
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        
+        // Only trigger if we're on the player tab and have a video
+        if (activeTab === 'player' && videoUrl) {
+          // Trigger frame capture by calling the exposed function
+          const captureFrame = (window as any).captureFrame
+          if (typeof captureFrame === 'function') {
+            const frame = captureFrame()
+            if (frame) {
+              handleFrameCapture(frame)
+            }
+          }
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [activeTab, videoUrl])
 
   // Check if settings are configured
   useEffect(() => {
@@ -220,7 +246,6 @@ function App() {
                     onFrameCapture={handleFrameCapture}
                   />
 
-                  {/* Key Frames from this Video - Prominent Section */}
                   {keyFrames.filter(f => f.videoUrl === videoUrl).length > 0 && (
                     <div className="bg-zinc-900 p-6 rounded-lg border border-zinc-700 shadow-xl">
                       <div className="flex items-center justify-between mb-6">

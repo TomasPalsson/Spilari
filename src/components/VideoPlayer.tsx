@@ -1,6 +1,7 @@
 // components/VideoPlayer.tsx
 import { useEffect, useRef } from 'react'
 import Hls from 'hls.js'
+import { AiOutlineMacCommand } from 'react-icons/ai'
 
 export interface LevelInfo {
   width: number
@@ -170,11 +171,8 @@ export default function VideoPlayer({ src, videoTitle, onMeta, onMetrics, onFram
 
       hls.on(Hls.Events.FRAG_LOADED, (_e, p: any) => {
         const { stats, frag } = p
-        const bytes =
-          stats?.total  ??
-          stats?.length ??
-          stats?.loaded ??
-          frag?.stats?.total ?? 0
+        console.log('Fragment loaded:', frag.sn, 'Duration:', frag.duration, 'Stats:', frag)
+        const bytes = frag.stats?.total
 
         let ms = 0
         if (stats?.tload && (stats.tfirst ?? stats.trequest)) {
@@ -215,19 +213,13 @@ export default function VideoPlayer({ src, videoTitle, onMeta, onMetrics, onFram
   }, [src, onMeta, onMetrics])
 
   return (
-    <div className="relative">
+    <div className="relative group">
       <video ref={videoRef} controls className="w-full h-72 rounded-lg" crossOrigin="anonymous" />
-      <button
-        onClick={() => {
-          const frame = captureCurrentFrame()
-          if (frame && onFrameCapture) {
-            onFrameCapture(frame)
-          }
-        }}
-        className="absolute top-2 right-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-      >
-        📸 Add to Collection
-      </button>
+      <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white px-3 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+        <div className="flex items-center gap-2">
+          <span>Press <strong>⌘K</strong> to add keyframe</span>
+        </div>
+      </div>
     </div>
   )
 }
