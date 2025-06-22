@@ -9,7 +9,6 @@ import BandwidthChart from './components/BandwidthChart'
 function App() {
   const [search, setSearch] = useState("")
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [item, setItem] = useState<any>(null)
   const [meta, setMeta] = useState<StreamMeta | null>(null)
   const [samples, setSamples] = useState<BandwidthSample[]>([])
 
@@ -83,9 +82,8 @@ function App() {
     }
   }
 
-  const handleVideoPlay = (url: string, item: any) => {
+  const handleVideoPlay = (url: string) => {
     setVideoUrl(url)
-    setItem(item)
     setMeta(null)
     setSamples([])
   }

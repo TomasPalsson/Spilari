@@ -4,7 +4,7 @@ import { FaVideo } from "react-icons/fa";
 interface FileCardProps {
   file: { Key: string; publicUrl?: string };
   bucket: string;
-  onVideoPlay: (url: string, item: any) => void;
+  onVideoPlay: (url: string) => void;
 }
 
 const FileCard: React.FC<FileCardProps> = ({ file, bucket, onVideoPlay }) => {
@@ -14,7 +14,7 @@ const FileCard: React.FC<FileCardProps> = ({ file, bucket, onVideoPlay }) => {
     const isVideo = (fileName ?? '').toLowerCase().endsWith('.m3u8') || (fileName ?? '').toLowerCase().endsWith('.mp4');
 
     const handleCardClick = () => {
-        if (isVideo && url) onVideoPlay(url, file);
+        if (isVideo && url) onVideoPlay(url);
     };
 
     return (

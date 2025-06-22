@@ -1,5 +1,5 @@
 // components/VideoPlayer.tsx
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import Hls from 'hls.js'
 
 export interface LevelInfo {
@@ -30,11 +30,14 @@ interface Props {
 
 export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [samples, setSamples] = useState<BandwidthSample[]>([])
+  const samplesRef = useRef<BandwidthSample[]>([])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
+
+    // Reset samples when source changes
+    samplesRef.current = []
 
     let hls: Hls | null = null
     const isHls = src.endsWith('.m3u8')
@@ -79,11 +82,8 @@ export default function VideoPlayer({ src, onMeta, onMetrics }: Props) {
 
         if (bytes && ms) {
           const kbps = (bytes * 8) / ms
-          setSamples(prev => {
-            const next = [...prev.slice(-99), { time: Date.now(), kbps }]
-            onMetrics(next)
-            return next
-          })
+          samplesRef.current = [...samplesRef.current.slice(-99), { time: Date.now(), kbps }]
+          onMetrics(samplesRef.current)
         }
       })
 
